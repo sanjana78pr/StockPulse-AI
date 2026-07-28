@@ -93,7 +93,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:
         logger.error("Failed to create MongoDB indexes for historical_prices: %s", str(exc))
 
+    # Create indexes for the live_market_data collection
+    try:
+        lm_collection = client[settings.MONGODB_NAME]["live_market_data"]
+        await lm_collection.create_index("symbol")
+        await lm_collection.create_index("timestamp")
+        logger.info("MongoDB indexes ensured for 'live_market_data' collection.")
+    except Exception as exc:
+        logger.error("Failed to create MongoDB indexes for live_market_data: %s", str(exc))
+
+
+    # Create indexes for the portfolios collection
+    try:
+        portfolios_collection = client[settings.MONGODB_NAME]["portfolios"]
+        await portfolios_collection.create_index("user_id")
+        await portfolios_collection.create_index([("user_id", 1), ("portfolio_name", 1)], unique=True)
+        logger.info("MongoDB indexes ensured for 'portfolios' collection.")
+    except Exception as exc:
+        logger.error("Failed to create MongoDB indexes for portfolios: %s", str(exc))
+
     yield
+
 
     # --- Shutdown ---
     logger.info("Shutting down %s...", settings.PROJECT_NAME)
