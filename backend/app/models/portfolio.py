@@ -19,3 +19,6 @@ class Portfolio(DocumentBase):
         self.total_profit_loss: float = kwargs.get("total_profit_loss", 0.0)
         self.total_profit_loss_percentage: float = kwargs.get("total_profit_loss_percentage", 0.0)
         self.is_default: bool = kwargs.get("is_default", False)
+        self.cash: float = float(kwargs.get("cash", kwargs.get("initial_balance", 0.0)))
+        self.holdings: dict = kwargs.get("holdings", {})
+

@@ -30,11 +30,14 @@ class PortfolioRepository:
             "investment_goal": portfolio_in.investment_goal,
             "risk_level": portfolio_in.risk_level,
             "currency": portfolio_in.currency.upper(),
-            "initial_balance": portfolio_in.initial_balance,
-            "current_value": portfolio_in.initial_balance,
+            "initial_balance": float(portfolio_in.initial_balance),
+            "current_value": float(portfolio_in.initial_balance),
             "total_profit_loss": 0.0,
             "total_profit_loss_percentage": 0.0,
             "is_default": portfolio_in.is_default,
+            # Explicitly persisted so transaction reads are always DB-authoritative
+            "cash": float(portfolio_in.initial_balance),
+            "holdings": {},
             "created_at": now,
             "updated_at": now,
         }
@@ -147,6 +150,29 @@ class PortfolioRepository:
             update_data["currency"] = update_data["currency"].upper()
 
         update_data["updated_at"] = datetime.now(timezone.utc)
+
+        result = await self.collection.find_one_and_update(
+            {"_id": ObjectId(portfolio_id)},
+            {"$set": update_data},
+            return_document=True,
+        )
+        return Portfolio(**result) if result else None
+
+    # ------------------------------------------------------------------
+    # Update holdings and cash only
+    # ------------------------------------------------------------------
+    async def update_holdings_and_cash(
+        self, portfolio_id: str, holdings: dict, cash: float
+    ) -> Portfolio | None:
+        """Update only the holdings and cash fields of a portfolio."""
+        if not ObjectId.is_valid(portfolio_id):
+            return None
+
+        update_data = {
+            "holdings": holdings,
+            "cash": cash,
+            "updated_at": datetime.now(timezone.utc),
+        }
 
         result = await self.collection.find_one_and_update(
             {"_id": ObjectId(portfolio_id)},

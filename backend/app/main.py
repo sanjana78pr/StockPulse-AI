@@ -112,6 +112,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:
         logger.error("Failed to create MongoDB indexes for portfolios: %s", str(exc))
 
+    # Create indexes for the transactions collection
+    try:
+        transactions_collection = client[settings.MONGODB_NAME]["transactions"]
+        await transactions_collection.create_index("user_id")
+        await transactions_collection.create_index("portfolio_id")
+        await transactions_collection.create_index("stock_symbol")
+        await transactions_collection.create_index("transaction_date")
+        logger.info("MongoDB indexes ensured for 'transactions' collection.")
+    except Exception as exc:
+        logger.error("Failed to create MongoDB indexes for transactions: %s", str(exc))
+
     yield
 
 
