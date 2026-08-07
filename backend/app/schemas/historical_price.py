@@ -13,7 +13,7 @@ ValidationLevel = Literal["low", "medium", "high"]
 class HistoricalPriceBase(BaseModel):
     """Shared fields for historical prices."""
     
-    symbol: str = Field(..., min_length=1, max_length=10, examples=["AAPL"])
+    symbol: str = Field(..., min_length=1, max_length=20, examples=["AAPL"])
     date: datetime = Field(..., description="Date and time of the price record.")
     open_price: float = Field(..., examples=[150.0])
     high_price: float = Field(..., examples=[155.0])

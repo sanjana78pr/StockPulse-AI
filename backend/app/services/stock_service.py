@@ -37,6 +37,8 @@ class StockService:
             is_active=stock.is_active,
             logo_url=stock.logo_url,
             website=stock.website,
+            country=getattr(stock, "country", None),
+            currency=getattr(stock, "currency", None),
             created_at=stock.created_at,
             updated_at=stock.updated_at,
         )
@@ -45,14 +47,73 @@ class StockService:
     # Create
     # ------------------------------------------------------------------
     async def create_stock(self, stock_in: StockCreate) -> StockResponse:
-        """Create a new stock after validating the symbol is unique."""
-        existing = await self.repository.get_by_symbol(stock_in.symbol)
+        """Create a new stock after validating the symbol is unique and exists in Yahoo Finance."""
+        symbol = stock_in.symbol.strip().upper()
+        
+        # Uniqueness check in repository
+        existing = await self.repository.get_by_symbol(symbol)
         if existing:
-            logger.warning(
-                "Stock creation failed: symbol '%s' already exists.", stock_in.symbol
-            )
+            logger.warning("Stock creation failed: symbol '%s' already exists.", symbol)
             raise ConflictException(
-                message=f"Stock with symbol '{stock_in.symbol.upper()}' already exists."
+                message=f"Stock with symbol '{symbol}' already exists."
+            )
+
+        # Validate with active market data provider
+        from app.services.providers.orchestrator import MarketDataOrchestrator
+        from fastapi import HTTPException
+        provider = MarketDataOrchestrator().get_provider()
+        
+        try:
+            summary = await provider.get_market_summary(symbol)
+            canonical_symbol = summary.quote.symbol.upper()
+            
+            # Check if canonical symbol matches any already in DB
+            if canonical_symbol != symbol:
+                existing_canonical = await self.repository.get_by_symbol(canonical_symbol)
+                if existing_canonical:
+                    raise ConflictException(
+                        message=f"Stock with symbol '{canonical_symbol}' already exists."
+                    )
+            
+            # Auto-populate metadata from Yahoo Finance provider
+            stock_in.symbol = canonical_symbol
+            if not stock_in.company_name:
+                stock_in.company_name = summary.company_info.company_name or canonical_symbol
+            if not stock_in.sector:
+                stock_in.sector = summary.company_info.sector
+            if not stock_in.industry:
+                stock_in.industry = summary.company_info.industry
+            if not stock_in.exchange:
+                stock_in.exchange = summary.company_info.exchange
+            if not stock_in.current_price:
+                stock_in.current_price = summary.quote.price
+            if not stock_in.market_cap:
+                stock_in.market_cap = summary.statistics.market_cap
+            if not stock_in.website:
+                # Try to guess web domain or default to Yahoo Finance page
+                stock_in.website = f"https://finance.yahoo.com/quote/{canonical_symbol}"
+            if not stock_in.country:
+                stock_in.country = summary.company_info.country
+            if not stock_in.currency:
+                stock_in.currency = summary.company_info.currency
+                
+            # Compute a nice logo url using Clearbit if domain is extractable
+            if not stock_in.logo_url and stock_in.website:
+                from urllib.parse import urlparse
+                parsed = urlparse(stock_in.website)
+                domain = parsed.netloc.replace("www.", "")
+                if domain and "yahoo.com" not in domain:
+                    stock_in.logo_url = f"https://logo.clearbit.com/{domain}"
+                    
+        except HTTPException as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Validation failed for symbol '{symbol}': {exc.detail}"
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Validation failed for symbol '{symbol}'. Ensure it is active and has data on Yahoo Finance."
             )
 
         stock = await self.repository.create(stock_in)

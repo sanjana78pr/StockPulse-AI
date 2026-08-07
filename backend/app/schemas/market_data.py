@@ -43,3 +43,8 @@ class MarketSummaryResponse(BaseModel):
     quote: LiveMarketQuoteResponse
     company_info: CompanyInformationResponse
     statistics: MarketStatisticsResponse
+
+
+class LiveMarketBatchResponse(BaseModel):
+    quotes: dict[str, LiveMarketQuoteResponse]
+    errors: dict[str, str]

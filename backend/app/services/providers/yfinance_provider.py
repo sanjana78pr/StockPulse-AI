@@ -1,7 +1,49 @@
 import asyncio
 import logging
+import os
+import sys
 from datetime import datetime
 from typing import Optional
+import httpx
+
+# Fix Windows Unicode path issues BEFORE importing yfinance
+# This must be done at module level before any HTTP libraries are imported
+if sys.platform == "win32":
+    # Set UTF-8 mode for Python on Windows
+    os.environ['PYTHONUTF8'] = '1'
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+    
+    # Reconfigure stdout and stderr to use UTF-8
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    
+    # Fix SSL certificate path issue on Windows with Unicode paths
+    # Copy certifi bundle to a safe ASCII path if needed
+    try:
+        import certifi
+        import shutil
+        import tempfile
+        
+        original_bundle = certifi.where()
+        
+        # Check if path contains non-ASCII characters
+        try:
+            original_bundle.encode('ascii')
+        except UnicodeEncodeError:
+            # Path contains Unicode, need to create ASCII copy
+            safe_bundle_path = os.path.join(tempfile.gettempdir(), 'cacert.pem')
+            if not os.path.exists(safe_bundle_path) or os.path.getmtime(original_bundle) > os.path.getmtime(safe_bundle_path):
+                shutil.copy2(original_bundle, safe_bundle_path)
+            
+            # Override the bundle location
+            os.environ['CURL_CA_BUNDLE'] = safe_bundle_path
+            os.environ['REQUESTS_CA_BUNDLE'] = safe_bundle_path
+            os.environ['SSL_CERT_FILE'] = safe_bundle_path
+            
+    except Exception as e:
+        logging.getLogger(__name__).warning("Could not set up safe SSL bundle path: %s", e)
 
 import yfinance as yf
 from fastapi import HTTPException, status
@@ -20,6 +62,7 @@ logger = logging.getLogger(__name__)
 class YahooFinanceProvider(BaseMarketDataProvider):
     """
     Implementation of the BaseMarketDataProvider using the yfinance library.
+    Handles Windows Unicode path issues that can cause UnicodeEncodeError.
     """
 
     @property
@@ -29,20 +72,37 @@ class YahooFinanceProvider(BaseMarketDataProvider):
     async def _fetch_ticker_info(self, symbol: str) -> dict:
         """
         Helper method to run yfinance blocking calls in an executor.
+        Now properly handles Windows Unicode path issues.
         """
         loop = asyncio.get_running_loop()
+        
+        def _safe_yfinance_call():
+            """Execute yfinance call with proper error handling."""
+            try:
+                ticker = yf.Ticker(symbol)
+                info = ticker.info
+                
+                if not info or "symbol" not in info or info.get("symbol") != symbol.upper():
+                    # yfinance returns generic info or empty dict if invalid
+                    # Sometimes it returns info for similar symbol. We strictly check.
+                    if not info or ("shortName" not in info and "regularMarketPrice" not in info and "currentPrice" not in info):
+                         raise HTTPException(
+                             status_code=status.HTTP_404_NOT_FOUND,
+                             detail=f"Symbol {symbol} not found or no data available."
+                         )
+                return info
+                
+            except HTTPException:
+                raise
+            except Exception as e:
+                # Log the actual error for debugging but don't hide it
+                logger.error("yfinance error for %s: %s", symbol, str(e))
+                raise e
+
         try:
-            ticker = yf.Ticker(symbol)
-            info = await loop.run_in_executor(None, lambda: ticker.info)
-            if not info or "symbol" not in info or info.get("symbol") != symbol.upper():
-                # yfinance returns generic info or empty dict if invalid
-                # Sometimes it returns info for similar symbol. We strictly check.
-                if not info or ("shortName" not in info and "regularMarketPrice" not in info and "currentPrice" not in info):
-                     raise HTTPException(
-                         status_code=status.HTTP_404_NOT_FOUND,
-                         detail=f"Symbol {symbol} not found or no data available."
-                     )
+            info = await loop.run_in_executor(None, _safe_yfinance_call)
             return info
+            
         except HTTPException:
             raise
         except Exception as e:
@@ -161,3 +221,38 @@ class YahooFinanceProvider(BaseMarketDataProvider):
             company_info=company,
             statistics=stats
         )
+
+    async def search_companies(self, query: str) -> list[dict]:
+        """Search Yahoo Finance for matching companies."""
+        url = "https://query2.finance.yahoo.com/v1/finance/search"
+        params = {"q": query, "quotesCount": 10, "newsCount": 0}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(url, params=params, headers=headers, timeout=5.0)
+                if response.status_code != 200:
+                    logger.error("Yahoo search API returned status %s: %s", response.status_code, response.text)
+                    return []
+                
+                data = response.json()
+                results = []
+                for q in data.get("quotes", []):
+                    symbol = q.get("symbol")
+                    company_name = q.get("longname") or q.get("shortname") or q.get("dispName") or symbol
+                    exchange = q.get("exchDisp") or q.get("exchange")
+                    country = q.get("country")
+                    if symbol and company_name:
+                        results.append({
+                            "symbol": symbol.upper(),
+                            "company_name": company_name,
+                            "exchange": exchange,
+                            "country": country,
+                            "quote_type": q.get("quoteType")
+                        })
+                return results
+            except Exception as e:
+                logger.error("Error searching companies on Yahoo Finance: %s", str(e))
+                return []

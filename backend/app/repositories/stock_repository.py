@@ -35,6 +35,8 @@ class StockRepository:
             "is_active": True,
             "logo_url": stock_in.logo_url,
             "website": stock_in.website,
+            "country": stock_in.country,
+            "currency": stock_in.currency,
             "created_at": now,
             "updated_at": now,
         }

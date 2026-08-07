@@ -76,8 +76,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         stocks_collection = client[settings.MONGODB_NAME]["stocks"]
         await stocks_collection.create_index("symbol", unique=True)
         logger.info("MongoDB unique index ensured for 'stocks' collection.")
+        
+        # Automatic Stock Initialization Seeding
+        from app.database.seeder import seed_stocks
+        await seed_stocks(db)
     except Exception as exc:
-        logger.error("Failed to create MongoDB indexes for stocks: %s", str(exc))
+        logger.error("Failed to create MongoDB indexes or seed stocks: %s", str(exc))
 
     # Create indexes for the historical_prices collection
     try:

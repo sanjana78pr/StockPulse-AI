@@ -1,6 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
 import DashboardLayout from './layouts/DashboardLayout';
 import AuthLayout from './layouts/AuthLayout';
+import ProtectedRoute from './components/shared/ProtectedRoute';
 
 // Pages
 import LandingPage from './pages/LandingPage';
@@ -13,33 +15,39 @@ import VolatilityAnalytics from './pages/VolatilityAnalytics';
 import PortfolioAnalytics from './pages/PortfolioAnalytics';
 import AIRecommendations from './pages/AIRecommendations';
 import Settings from './pages/Settings';
+import Transactions from './pages/Transactions';
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        {/* Public Routes */}
-        <Route element={<AuthLayout />}>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
-        </Route>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          {/* Public Routes */}
+          <Route element={<AuthLayout />}>
+            <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<LoginPage />} />
+          </Route>
 
-        {/* Protected Routes (Dashboard) */}
-        <Route path="/app" element={<DashboardLayout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="market" element={<LiveMarket />} />
-          <Route path="stocks" element={<StockDetails />} />
-          <Route path="predictions" element={<TrendPrediction />} />
-          <Route path="volatility" element={<VolatilityAnalytics />} />
-          <Route path="portfolio" element={<PortfolioAnalytics />} />
-          <Route path="recommendations" element={<AIRecommendations />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
+          {/* Protected Routes (require authentication) */}
+          <Route path="/app" element={<ProtectedRoute />}>
+            <Route element={<DashboardLayout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="market" element={<LiveMarket />} />
+              <Route path="stocks" element={<StockDetails />} />
+              <Route path="predictions" element={<TrendPrediction />} />
+              <Route path="volatility" element={<VolatilityAnalytics />} />
+              <Route path="portfolio" element={<PortfolioAnalytics />} />
+              <Route path="recommendations" element={<AIRecommendations />} />
+              <Route path="transactions" element={<Transactions />} />
+              <Route path="settings" element={<Settings />} />
+            </Route>
+          </Route>
 
-        {/* Fallback Route */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Router>
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Router>
+    </AuthProvider>
   );
 }
 

@@ -19,3 +19,5 @@ class Stock(DocumentBase):
         self.is_active: bool = kwargs.get("is_active", True)
         self.logo_url: str | None = kwargs.get("logo_url")
         self.website: str | None = kwargs.get("website")
+        self.country: str | None = kwargs.get("country")
+        self.currency: str | None = kwargs.get("currency")

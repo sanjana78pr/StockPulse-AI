@@ -1,7 +1,8 @@
+
 import requests
 import sys
 
-BASE_URL = "http://localhost:8000/api/v1"
+BASE_URL = "http://127.0.0.1:8000/api/v1"
 
 def run_tests():
     print("--- Testing Stock Endpoints ---")
@@ -104,7 +105,7 @@ def run_tests():
         print(f"Failed to delete stock: {resp.text}")
         sys.exit(1)
         
-    print("\n✅ All endpoints tested successfully!")
+    print("\n[OK] All endpoints tested successfully!")
 
 if __name__ == "__main__":
     run_tests()

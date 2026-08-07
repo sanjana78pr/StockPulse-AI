@@ -39,3 +39,8 @@ class BaseMarketDataProvider(ABC):
     async def get_market_summary(self, symbol: str) -> MarketSummaryResponse:
         """Fetch a complete market summary for a symbol."""
         pass
+
+    @abstractmethod
+    async def search_companies(self, query: str) -> list[dict]:
+        """Search for matching companies on external provider."""
+        pass

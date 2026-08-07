@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 class StockBase(BaseModel):
     """Shared fields across create, update, and response schemas."""
 
-    company_name: str = Field(..., min_length=1, max_length=255, examples=["Apple Inc."])
+    company_name: str | None = Field(None, max_length=255, examples=["Apple Inc."])
     sector: str | None = Field(None, max_length=100, examples=["Technology"])
     industry: str | None = Field(None, max_length=100, examples=["Consumer Electronics"])
     exchange: str | None = Field(None, max_length=50, examples=["NASDAQ"])
@@ -20,6 +20,8 @@ class StockBase(BaseModel):
     description: str | None = Field(None, max_length=2000)
     logo_url: str | None = Field(None, max_length=500)
     website: str | None = Field(None, max_length=500)
+    country: str | None = Field(None, max_length=100, examples=["United States"])
+    currency: str | None = Field(None, max_length=20, examples=["USD"])
 
 
 # ---------------------------------------------------------------------------
@@ -31,7 +33,7 @@ class StockCreate(StockBase):
     symbol: str = Field(
         ...,
         min_length=1,
-        max_length=10,
+        max_length=20,
         pattern=r"^[A-Z0-9.\-]+$",
         examples=["AAPL"],
         description="Ticker symbol (uppercase letters, digits, dots, hyphens).",
@@ -54,6 +56,8 @@ class StockUpdate(BaseModel):
     is_active: bool | None = None
     logo_url: str | None = Field(None, max_length=500)
     website: str | None = Field(None, max_length=500)
+    country: str | None = Field(None, max_length=100)
+    currency: str | None = Field(None, max_length=20)
 
 
 # ---------------------------------------------------------------------------
@@ -83,3 +87,16 @@ class StockListResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+# ---------------------------------------------------------------------------
+# External Search Response
+# ---------------------------------------------------------------------------
+class StockExternalSearchResponse(BaseModel):
+    """Search result from external provider."""
+
+    symbol: str
+    company_name: str
+    exchange: str | None = None
+    country: str | None = None
+    quote_type: str | None = None

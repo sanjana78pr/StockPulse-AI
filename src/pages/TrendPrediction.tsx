@@ -4,21 +4,36 @@ import { generateStockData } from '../lib/mockData';
 import { BrainCircuit, TrendingUp, Zap } from 'lucide-react';
 import KPICard from '../components/shared/KPICard';
 
+/**
+ * STABILITY FIX: historicalData and predictedData are now computed inside
+ * useState initializers, so they are generated exactly once on mount.
+ *
+ * Previously these computations (including Math.random() calls) lived in the
+ * component body and ran on every render. Every re-render of TrendPrediction
+ * produced completely new data arrays, causing Plotly to re-draw the chart with
+ * different random values on each render — creating continuous visual flicker.
+ */
 export default function TrendPrediction() {
   const [symbol] = useState('AAPL');
-  
-  // Mock data for historical vs predicted
-  const historicalDays = 60;
-  const predictedDays = 30;
-  const historicalData = generateStockData(historicalDays, 160, 0.015);
+
+  const [historicalData] = useState(() => {
+    const historicalDays = 60;
+    return generateStockData(historicalDays, 160, 0.015);
+  });
+
+  const [predictedData] = useState(() => {
+    const historicalDays = 60;
+    const seed = generateStockData(historicalDays, 160, 0.015);
+    const lastPrice = seed[seed.length - 1].close;
+    const predictedDays = 30;
+    return generateStockData(predictedDays, lastPrice, 0.02).map((d, i) => ({
+      ...d,
+      // Upward bias — generated once and frozen
+      close: lastPrice * (1 + (0.002 * i)) + ((i * 17) % 5 - 2.5),
+    }));
+  });
+
   const lastPrice = historicalData[historicalData.length - 1].close;
-  
-  // Generate predicted path with upward trend
-  const predictedData = generateStockData(predictedDays, lastPrice, 0.02).map((d, i) => ({
-    ...d,
-    close: lastPrice * (1 + (0.002 * i)) + (Math.random() * 5 - 2.5) // Upward bias
-  }));
-  
   const targetPrice = predictedData[predictedData.length - 1].close;
   const predictedChange = ((targetPrice - lastPrice) / lastPrice) * 100;
 
@@ -31,14 +46,14 @@ export default function TrendPrediction() {
 
       {/* Top Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <KPICard 
-          title="Predicted Target (30D)" 
-          value={targetPrice.toFixed(2)} 
+        <KPICard
+          title="Predicted Target (30D)"
+          value={targetPrice.toFixed(2)}
           prefix="$"
           change={parseFloat(predictedChange.toFixed(2))}
           icon={<Target className="w-5 h-5 text-blue-400" />}
         />
-        
+
         <div className="glass-panel rounded-xl p-5 flex flex-col justify-center">
           <div className="flex justify-between items-start mb-2">
             <h3 className="text-sm font-medium text-gray-400">Trend Probability</h3>
@@ -146,7 +161,7 @@ export default function TrendPrediction() {
   );
 }
 
-// Quick hack for Target icon missing in import
+// Target icon inline (avoids missing lucide import)
 const Target = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>

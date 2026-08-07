@@ -18,6 +18,7 @@ from app.schemas.stock import (
     StockListResponse,
     StockResponse,
     StockUpdate,
+    StockExternalSearchResponse,
 )
 from app.services.stock_service import StockService
 
@@ -61,7 +62,7 @@ async def create_stock(
 async def list_stocks(
     db: Annotated[AsyncIOMotorDatabase, Depends(get_db)],
     page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(20, ge=1, le=100, description="Results per page"),
+    page_size: int = Query(20, ge=1, le=1000, description="Results per page"),
     sort_by: str = Query("symbol", description="Field to sort by"),
     sort_order: str = Query("asc", pattern="^(asc|desc)$", description="Sort direction"),
     sector: str | None = Query(None, description="Filter by sector"),
@@ -83,6 +84,26 @@ async def list_stocks(
         is_active=is_active,
         search=search,
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /stocks/search/external – Search external stocks on Yahoo Finance
+# ---------------------------------------------------------------------------
+@router.get(
+    "/search/external",
+    response_model=list[StockExternalSearchResponse],
+    summary="Search stocks on external provider",
+    description="Search Yahoo Finance for matching symbols. Requires authentication.",
+)
+async def search_external_stocks(
+    current_user: Annotated[User, Depends(get_current_user)],
+    q: str = Query(..., min_length=1, description="Search query"),
+):
+    """Search Yahoo Finance for matching tickers."""
+    from app.services.providers.orchestrator import MarketDataOrchestrator
+    provider = MarketDataOrchestrator().get_provider()
+    results = await provider.search_companies(q)
+    return results
 
 
 # ---------------------------------------------------------------------------

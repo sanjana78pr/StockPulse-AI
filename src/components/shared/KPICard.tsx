@@ -12,11 +12,17 @@ interface KPICardProps {
   icon?: React.ReactNode;
 }
 
-export default function KPICard({ title, value, change, prefix = '', suffix = '', icon }: KPICardProps) {
+/**
+ * STABILITY FIX: Wrapped in React.memo so the component only re-renders when
+ * its own props change. Without memo, KPICard re-rendered on every parent
+ * re-render (e.g. every time Dashboard re-fetched data or polling fired),
+ * causing framer-motion to re-evaluate animation state unnecessarily.
+ */
+const KPICard = React.memo(function KPICard({ title, value, change, prefix = '', suffix = '', icon }: KPICardProps) {
   const isPositive = change !== undefined && change >= 0;
-  
+
   return (
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="glass-panel rounded-xl p-5 hover:bg-white/[0.02] transition-colors"
@@ -25,13 +31,13 @@ export default function KPICard({ title, value, change, prefix = '', suffix = ''
         <h3 className="text-sm font-medium text-gray-400">{title}</h3>
         {icon && <div className="text-gray-500">{icon}</div>}
       </div>
-      
+
       <div className="flex items-baseline gap-2">
         <span className="text-2xl md:text-3xl font-bold text-gray-100 tracking-tight">
           {prefix}{value}{suffix}
         </span>
       </div>
-      
+
       {change !== undefined && (
         <div className={cn("flex items-center mt-2 text-sm font-medium", isPositive ? "text-market-up" : "text-market-down")}>
           {isPositive ? <ArrowUpRight className="w-4 h-4 mr-1" /> : <ArrowDownRight className="w-4 h-4 mr-1" />}
@@ -40,4 +46,6 @@ export default function KPICard({ title, value, change, prefix = '', suffix = ''
       )}
     </motion.div>
   );
-}
+});
+
+export default KPICard;

@@ -6,6 +6,7 @@ All modules should use `get_logger(__name__)` to obtain a named logger.
 """
 
 import logging
+import os
 import sys
 from typing import Optional
 
@@ -61,6 +62,11 @@ def setup_logging(log_level: Optional[str] = None) -> None:
     Args:
         log_level: Override log level. If None, reads from settings.
     """
+    # Set UTF-8 encoding environment variables to fix Windows Unicode issues
+    # This must be done before any yfinance imports or HTTP requests
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+    os.environ['PYTHONUTF8'] = '1'
+    
     settings = get_settings()
     level = getattr(logging, (log_level or settings.LOG_LEVEL).upper(), logging.INFO)
 
@@ -70,6 +76,12 @@ def setup_logging(log_level: Optional[str] = None) -> None:
 
     # Avoid duplicate handlers on repeated calls
     if not root_logger.handlers:
+        # Ensure UTF-8 encoding for stdout to handle Unicode characters on Windows
+        if hasattr(sys.stdout, 'reconfigure'):
+            try:
+                sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+            except Exception:
+                pass  # Fallback to default if reconfigure fails
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setLevel(level)
 
